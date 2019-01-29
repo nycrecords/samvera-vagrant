@@ -1,26 +1,33 @@
-###
-# BASICS
-###
+#!/usr/bin/env bash
+# Basic Development Environment Setup
 
 SHARED_DIR=$1
 
 if [ -f "$SHARED_DIR/install_scripts/config" ]; then
-  . $SHARED_DIR/install_scripts/config
+	# shellcheck disable=SC1090
+	. "$SHARED_DIR"/install_scripts/config
 fi
 
-cd
+cd "$HOME" || return 1
 
-# Update
-apt-get -y update && apt-get -y upgrade
+# Update local OS
+yum -y update && yum -y upgrade
 
 # SSH
-apt-get -y install openssh-server
+yum -y install openssh-server
 
 # Build tools
-apt-get -y install build-essential
+yum -y install build-essential
 
 # Git vim
-apt-get -y install git vim
+yum -y install git vim
 
 # Wget, curl, libcurl and unzip
-apt-get -y install wget curl libcurl3 unzip
+yum -y install wget curl libcurl3 unzip
+
+# Development Tools
+yum -y groupinstall "Development Tools"
+
+cat >>"$HOME"/.bash_profile <<EOF
+cd /vagrant
+EOF

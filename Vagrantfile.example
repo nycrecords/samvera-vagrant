@@ -1,0 +1,81 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+$default_system_name = "samvera-vagrant" + Time.now.strftime("%m-%d-%Y_%H-%M")
+
+$rhsn_username = ENV['RH_USER'] || ""
+$rhsn_password = ENV['RH_PASSWORD'].to_s.empty? ? "" : ENV['RH_PASSWORD']
+$rhsn_system_name = ENV['RHSN_SYSTEM_NAME'].to_s.empty? ? $default_system_name : ENV['RHSN_SYSTEM_NAME']
+
+$use_proxy = ENV['http_proxy'].to_s.empty? ? false : true
+$proxy_hostname = ENV['proxy_hostname'] || ""
+$proxy_port = ENV['proxy_port'] || 
+
+$shared_dir = "/vagrant"
+
+$subscription_manager_command_no_proxy = "sudo sh /vagrant/install_scripts/subscribe.sh --username=$1 --password=$2 --name=$3"
+$subscription_manager_command_proxy = "sudo sh /vagrant/install_scripts/subscribe.sh --username=$1 --password=$2 --name=$3 --proxy_hostname=$4 --proxy_port=$5"
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "rhel-7.6"
+
+  config.vm.provider "virtualbox" do |vb|
+    # Customize the amount of memory on the VM:
+    vb.memory = "2048"
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+  end
+
+  # Turn on SSH forwarding (so that 'vagrant ssh' has access to your local SSH keys, and you can use your local SSH keys to access GitHub, etc.)
+  config.ssh.forward_agent = true
+
+  if $use_proxy
+    # Proxy Configuration
+    config.vm.provision "shell" do |s|
+      s.inline = 'sudo cp /vagrant/install_scripts/proxy.sh /etc/profile.d/'
+    end
+
+    config.vm.provision :reload
+
+  end
+
+  # RedHat Subscription Management
+  if $use_proxy
+    config.vm.provision "shell" do |s|
+      s.inline = $subscription_manager_command_proxy
+      s.args = ["#{$rhsn_username}", "#{$rhsn_password}", "#{$rhsn_system_name}", "#{$proxy_hostname}", "#{$proxy_port}"]
+    end
+  else
+    config.vm.provision "shell" do |s|
+      s.inline = $subscription_manager_command_no_proxy
+      s.args = ["#{$rhsn_username}", "#{$rhsn_password}", "#{$rhsn_system_name}"]
+    end
+  end
+
+  config.vm.define "default", primary: true do |default|
+    # Network Settings
+    default.vm.network :forwarded_port, guest: 3000, host: 3000 # Rails
+    default.vm.network :forwarded_port, guest: 8983, host: 8983 # Solr
+    default.vm.network :forwarded_port, guest: 8984, host: 8984 # Fedora
+    default.vm.network :forwarded_port, guest: 8888, host: 8888 # Jasmine Tests
+
+    # Provisioning Scripts
+    default.vm.provision "shell", path: "./install_scripts/bootstrap.sh", args: $shared_dir
+    default.vm.provision "shell", path: "./install_scripts/java.sh", args: $shared_dir
+    default.vm.provision "shell", path: "./install_scripts/ruby.sh", args: $shared_dir
+    default.vm.provision "shell", path: "./install_scripts/postgres.sh", args: $shared_dir
+    default.vm.provision "shell", path: "./install_scripts/multitenancy.sh", args: $shared_dir
+    default.vm.provision "shell", path: "./install_scripts/fits.sh", args: $shared_dir, privileged: false
+    default.vm.provision "shell", inline: "sudo cp ./install_scripts/enable_packages.sh /etc/profile.d/"
+    default.vm.provision "shell", path: "./install_scripts/demo-app.sh", args: $shared_dir, privileged: false
+  end
+
+  config.trigger.before :destroy do |trigger|
+    $script = <<-SCRIPT
+    subscription-manager unsubscribe --all; true
+    subscription-manager unregister; true
+    SCRIPT
+
+    trigger.run_remote = { inline: $script }
+  end
+
+end
