@@ -8,8 +8,8 @@ $rhsn_password = ENV['RH_PASSWORD'].to_s.empty? ? "" : ENV['RH_PASSWORD']
 $rhsn_system_name = ENV['RHSN_SYSTEM_NAME'].to_s.empty? ? $default_system_name : ENV['RHSN_SYSTEM_NAME']
 
 $use_proxy = ENV['http_proxy'].to_s.empty? ? false : true
-$proxy_hostname = ENV['proxy_hostname'] || ""
-$proxy_port = ENV['proxy_port'] || 
+$proxy_hostname = $use_proxy ? "bcpxy.nycnet" : ""
+$proxy_port = $use_proxy ? "8080" : ""
 
 $shared_dir = "/vagrant"
 
@@ -37,7 +37,6 @@ Vagrant.configure("2") do |config|
     config.vm.provision :reload
 
   end
-
   # RedHat Subscription Management
   if $use_proxy
     config.vm.provision "shell" do |s|
@@ -66,7 +65,7 @@ Vagrant.configure("2") do |config|
     default.vm.provision "shell", path: "./install_scripts/multitenancy.sh", args: $shared_dir
     default.vm.provision "shell", path: "./install_scripts/fits.sh", args: $shared_dir, privileged: false
     default.vm.provision "shell", inline: "sudo cp ./install_scripts/enable_packages.sh /etc/profile.d/"
-    default.vm.provision "shell", path: "./install_scripts/demo-app.sh", args: $shared_dir, privileged: false
+    # default.vm.provision "shell", path: "./install_scripts/demo-app.sh", args: $shared_dir, privileged: false
   end
 
   config.trigger.before :destroy do |trigger|
